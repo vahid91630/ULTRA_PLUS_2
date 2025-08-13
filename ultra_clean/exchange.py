@@ -9,13 +9,10 @@ class ExchangeAdapter:
     @classmethod
     def from_env(cls):
         name = os.getenv("EXCHANGE","mexc").lower()
-        api  = os.getenv("API_KEY") or ""
-        sec  = os.getenv("SECRET") or ""
+        api  = os.getenv("API_KEY") or os.getenv("EXCHANGE_API_KEY") or ""
+        sec  = os.getenv("SECRET")  or os.getenv("EXCHANGE_SECRET_KEY") or ""
         sandbox = os.getenv("SANDBOX","true").lower() in {"1","true","yes","on"}
-        if name == "mexc":
-            ex = ccxt.mexc({"apiKey": api, "secret": sec, "enableRateLimit": True})
-        else:
-            ex = getattr(ccxt, name)({"apiKey": api, "secret": sec, "enableRateLimit": True})
+        ex = getattr(ccxt, name)({"apiKey": api, "secret": sec, "enableRateLimit": True})
         if sandbox and hasattr(ex, "set_sandbox_mode"):
             try: ex.set_sandbox_mode(True)
             except: pass
