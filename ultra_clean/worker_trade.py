@@ -1,38 +1,62 @@
-from __future__ import annotations
+import os
 import time
-from .config import AppConfig
-from .db import DB
-from .exchange import ExchangeAdapter
-from .heartbeat import beat
-from .logger import jlog
-def main():
-    cfg = AppConfig()
-    if not cfg.mongo_url: raise RuntimeError("MONGO_URL لازم است")
-    db = DB(cfg.mongo_url)
-    cfg = AppConfig().__class__(**{**cfg.__dict__, "service_name":"worker_trade"})
-    ex = ExchangeAdapter.from_cfg(cfg.exchange, cfg.api_key, cfg.secret_key, cfg.sandbox)
+import logging
+from pymongo import MongoClient
+from ultra_clean.exchange import ExchangeAdapter
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+API_KEY = os.getenv("API_KEY")
+SECRET  = os.getenv("SECRET")
+MONGO_URL = os.getenv("MONGO_URL")
+SYMBOL = os.getenv("SYMBOL", "BTC/USDT")
+TIMEFRAME = os.getenv("TIMEFRAME", "1m")
+
+if not API_KEY or not SECRET:
+    logging.error("❌ API_KEY یا SECRET در Railway تنظیم نشده!")
+    time.sleep(10)
+    raise SystemExit
+
+if not MONGO_URL:
+    logging.warning("⚠️ MONGO_URL پیدا نشد. دیتاها در Mongo ذخیره نمی‌شوند.")
+    mongo_db = None
+else:
+    client = MongoClient(MONGO_URL)
+    mongo_db = client.get_database()
+    logging.info(f"✅ اتصال به MongoDB برقرار شد: {mongo_db.name}")
+
+ex = ExchangeAdapter.from_env()
+logging.info(f"✅ اتصال به صرافی برقرار شد ({ex.ex.id})")
+
+def save_trade(trade_data):
+    if mongo_db:
+        mongo_db.trades.insert_one(trade_data)
+        logging.info(f"💾 ذخیره معامله در MongoDB: {trade_data}")
+    else:
+        logging.info(f"💾 [FAKE SAVE] {trade_data}")
+
+def trade_loop():
     while True:
         try:
-            sig = db.signals.find_one(sort=[("ts",-1)])
-            if not sig or int(time.time()) > int(sig.get("ttl",0)):
-                beat(cfg, db, "ok", idle=True); time.sleep(2); continue
-            side = sig["ens"]["side"]
-            if side == "hold":
-                beat(cfg, db, "ok", hold=True); time.sleep(2); continue
-            t = ex.fetch_ticker(cfg.symbol)
-            px = float(t.get("last") or 0.0) or 0.0
-            usd = 20.0
-            amt = usd / max(px,1e-9)
-            try:
-                ex.create_market_order(cfg.symbol, side, amt)
-                db.trades.insert_one({"ts": int(time.time()*1000), "symbol": cfg.symbol, "side": side, "price": px, "amount": amt, "usd": usd})
-                beat(cfg, db, "ok", traded=side, usd=usd)
-                jlog("info","trade_ok", side=side, usd=usd)
-            except Exception as e:
-                beat(cfg, db, "error", err=str(e))
-                jlog("error","trade_fail", err=str(e))
+            ticker = ex.fetch_ticker(SYMBOL)
+            price = ticker.get("last")
+            logging.info(f"📊 قیمت فعلی {SYMBOL}: {price}")
+
+            # نمونه استراتژی ساده
+            if price and price < 60000:
+                logging.info("🛒 خرید انجام شد!")
+                order = ex.create_market_order(SYMBOL, "buy", 0.001)
+                save_trade({"type": "buy", "price": price, "order": order})
+
+            elif price and price > 70000:
+                logging.info("💰 فروش انجام شد!")
+                order = ex.create_market_order(SYMBOL, "sell", 0.001)
+                save_trade({"type": "sell", "price": price, "order": order})
+
         except Exception as e:
-            beat(cfg, db, "error", err=str(e))
-            jlog("error","loop_fail", err=str(e))
-        time.sleep(3)
-if __name__ == "__main__": main()
+            logging.error(f"⚠️ خطا در لوپ معامله: {e}")
+
+        time.sleep(10)  # هر 10 ثانیه یکبار
+
+if __name__ == "__main__":
+    trade_loop()
