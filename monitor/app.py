@@ -10,21 +10,25 @@ def _has(k: str) -> bool: return bool(os.getenv(k))
 def status():
     need = ["API_KEY","SECRET","EXCHANGE","SYMBOL","TIMEFRAME"]
     miss = [k for k in need if not _has(k)]
-    mongo = os.getenv("MONGO_URL")
     return JSONResponse({
         "ok": len(miss)==0,
         "missing_env": miss,
         "exchange": os.getenv("EXCHANGE","mexc"),
         "sandbox": os.getenv("SANDBOX","true"),
-        "mongo_present": bool(mongo),
+        "mongo_present": bool(os.getenv("MONGO_URL")),
         "host": socket.gethostname(),
     })
 
 @app.get("/")
 def home():
-    return {"msg":"داشبورد آنلاین است. /status را باز کن برای وضعیت."}
+    return {"msg":"داشبورد آنلاین است. برای بررسی تنظیمات، /status و /debug/env را باز کن."}
 
 @app.get("/debug/env")
 def debug_env():
     keep = ["API_KEY","SECRET","EXCHANGE","SANDBOX","SYMBOL","TIMEFRAME","MONGO_URL"]
-    return {k: ("***" if k in {"API_KEY","SECRET","MONGO_URL"} and _has(k) else os.getenv(k)) for k in keep}
+    redacted = {"API_KEY","SECRET","MONGO_URL"}
+    out = {}
+    for k in keep:
+        v = os.getenv(k)
+        out[k] = ("***" if (k in redacted and v) else v)
+    return out
