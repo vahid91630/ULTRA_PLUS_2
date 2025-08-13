@@ -5,8 +5,7 @@ WORKDIR /app
 COPY requirements.txt ./requirements.txt
 RUN python -m pip install --upgrade pip && pip install -r requirements.txt
 COPY . .
-RUN useradd -m bot && chown -R bot:bot /app
-USER bot
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD curl -fsS http://127.0.0.1:8000/status || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8000/status || exit 1
 CMD ["python","scripts/run_all.py"]
