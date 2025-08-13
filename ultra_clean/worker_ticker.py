@@ -1,24 +1,34 @@
-from __future__ import annotations
-import time
-from .config import AppConfig
-from .db import DB
-from .exchange import ExchangeAdapter
-from .heartbeat import beat
-from .logger import jlog
+import os, time, logging
+from datetime import datetime, timezone
+from pymongo import MongoClient
+from ultra_clean.exchange import ExchangeAdapter
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+SYMBOL = os.getenv("SYMBOL", "BTC/USDT")
+MONGO_URL = os.getenv("MONGO_URL")
+
+db = None
+if MONGO_URL:
+    db = MongoClient(MONGO_URL).get_database()
+    logging.info("✅ Mongo متصل شد (ticker).")
+else:
+    logging.warning("⚠️ MONGO_URL نیست؛ فقط لاگ می‌نویسم (ticker).")
+
+ex = ExchangeAdapter.from_env()
+now_ms = lambda: int(datetime.now(timezone.utc).timestamp() * 1000)
+
 def main():
-    cfg = AppConfig()
-    if not cfg.mongo_url: raise RuntimeError("MONGO_URL لازم است")
-    db = DB(cfg.mongo_url)
-    cfg = AppConfig().__class__(**{**cfg.__dict__, "service_name":"worker_ticker"})
-    ex = ExchangeAdapter.from_cfg(cfg.exchange, cfg.api_key, cfg.secret_key, cfg.sandbox)
+    logging.info(f"🚀 worker_ticker برای {SYMBOL} شروع شد.")
     while True:
         try:
-            t = ex.fetch_ticker(cfg.symbol)
-            db.ticker.insert_one({"ts": int(time.time()*1000), "symbol": cfg.symbol, "tick": t})
-            beat(cfg, db, "ok", price=float(t.get("last") or 0))
-            jlog("info","ticker", p=float(t.get("last") or 0))
+            t = ex.fetch_ticker(SYMBOL)
+            last = float(t.get("last") or 0.0)
+            doc = {"ts": now_ms(), "symbol": SYMBOL, "last": last, "raw": t}
+            if db: db.ticker.insert_one(doc)
+            logging.info(f"📈 {SYMBOL} = {last}")
         except Exception as e:
-            beat(cfg, db, "error", err=str(e))
-            jlog("error","ticker_fail", err=str(e))
+            logging.error(f"ticker error: {e}")
         time.sleep(5)
-if __name__ == "__main__": main()
+
+if __name__ == "__main__":
+    main()
