@@ -2,37 +2,50 @@
 from __future__ import annotations
 import os
 import ccxt
+from typing import Tuple
 
-def _make_client(name: str, api: str, sec: str):
-    cls = getattr(ccxt, name, None) or getattr(ccxt, "mexc", None) or getattr(ccxt, "mexc3", None)
-    if cls is None:
-        raise RuntimeError(f"Unsupported exchange id: {name}")
+def _bool_env(name: str, default: bool = False) -> bool:
+    v = os.getenv(name, str(default)).strip().lower()
+    return v in {"1", "true", "yes", "on"}
+
+def _make_client(ex_id: str, api: str, sec: str):
+    ex_id = (ex_id or "mexc").lower()
+    cls = getattr(ccxt, ex_id, None) or getattr(ccxt, "mexc", None) or getattr(ccxt, "mexc3", None)
+    if not cls:
+        raise RuntimeError(f"Unsupported exchange id: {ex_id}")
     return cls({
         "apiKey": api or "",
         "secret": sec or "",
         "enableRateLimit": True,
-        "options": {"defaultType": "spot"},
+        "options": {
+            "defaultType": "spot",
+            "adjustForTimeDifference": True,  # چرا: امضا به‌خاطر اختلاف زمان رد نشود
+        },
     })
 
-def build_exchange(name: str, api: str, sec: str):
-    """
-    برمی‌گرداند: نمونهٔ اکسچنج ccxt با گارد سندباکس.
-    برای MEXC هرگز sandbox فعال نمی‌شود چون test URL ندارد.
-    """
-    ex_id = (name or "mexc").lower()
+def build_exchange(ex_id: str, api: str, sec: str):
     ex = _make_client(ex_id, api, sec)
 
-    sandbox_env = os.getenv("SANDBOX", "false").strip().lower() in {"1", "true", "yes", "on"}
-    # فقط اگر: 1) کاربر سندباکس خواسته 2) اکسچنج تست‌نت دارد 3) mexc/mexc3 نیست
-    if sandbox_env:
+    # هرگز برای MEXC sandbox نزن
+    sandbox = _bool_env("SANDBOX", False)
+    if sandbox and getattr(ex, "id", "mexc") not in {"mexc", "mexc3"}:
         try:
-            urls = getattr(ex, "urls", {}) or {}
-            has_test = bool(urls.get("test"))
-            if has_test and getattr(ex, "id", ex_id) not in {"mexc", "mexc3"} and hasattr(ex, "set_sandbox_mode"):
+            if getattr(ex, "urls", {}).get("test") and hasattr(ex, "set_sandbox_mode"):
                 ex.set_sandbox_mode(True)
-            # اگر یکی از شرایط نبود، به‌صورت امن نادیده بگیر
         except Exception:
             pass
 
     ex.load_markets()
     return ex
+
+def verify_auth(ex) -> Tuple[bool, str | None]:
+    """صحت کلیدها را چک می‌کند؛ اگر خطا باشد، پیام دقیق برمی‌گرداند."""
+    try:
+        # Sync اختلاف ساعت با صرافی
+        if hasattr(ex, "load_time_difference"):
+            ex.load_time_difference()
+        # یک کال خصوصی سبک برای تست امضا/کلید
+        ex.fetch_balance(params={"recvWindow": 50000})
+        return True, None
+    except Exception as e:
+        return False, str(e)
