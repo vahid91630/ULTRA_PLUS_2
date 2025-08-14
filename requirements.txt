@@ -1,11 +1,11 @@
+ccxt
+pymongo==4.8.0
 fastapi
 uvicorn[standard]
 pydantic>=2
 pydantic-settings
-sqlalchemy>=2
-psycopg2-binary
-ccxt
 pandas
 numpy
+sqlalchemy>=2
+psycopg2-binary
 pytest
-pymongo==4.8.0
