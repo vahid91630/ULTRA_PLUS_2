@@ -1,0 +1,12 @@
+{
+  "services": [
+    {
+      "name": "web",
+      "startCommand": "python -m app.dashboard"
+    },
+    {
+      "name": "worker",
+      "startCommand": "python -m core.engine --mode ${MODE:-paper}"
+    }
+  ]
+}
