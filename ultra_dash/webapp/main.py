@@ -152,6 +152,3 @@ async def readyz():
     cx = check_exchange()
     ok = mg.get("ok", False) and cx.get("ok", False)
     return JSONResponse({"ok": ok, "mongo": mg.get("ok"), "exchange": cx.get("ok")})
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
