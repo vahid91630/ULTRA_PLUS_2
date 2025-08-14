@@ -1,11 +1,6 @@
-ccxt
-pymongo==4.8.0
 fastapi
 uvicorn[standard]
-pydantic>=2
-pydantic-settings
-pandas
-numpy
-sqlalchemy>=2
-psycopg2-binary
-pytest
+jinja2
+pymongo
+python-dateutil
+pydantic==2.*
