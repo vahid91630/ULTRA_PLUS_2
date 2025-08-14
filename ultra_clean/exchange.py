@@ -1,41 +1,38 @@
+# path: ultra_clean/exchange.py
+from __future__ import annotations
 import os
 import ccxt
 
-class ExchangeAdapter:
-    def __init__(self, ex: ccxt.Exchange):
-        self.ex = ex
-        self._markets_loaded = False
+def _make_client(name: str, api: str, sec: str):
+    cls = getattr(ccxt, name, None) or getattr(ccxt, "mexc", None) or getattr(ccxt, "mexc3", None)
+    if cls is None:
+        raise RuntimeError(f"Unsupported exchange id: {name}")
+    return cls({
+        "apiKey": api or "",
+        "secret": sec or "",
+        "enableRateLimit": True,
+        "options": {"defaultType": "spot"},
+    })
 
-    @classmethod
-    def from_env(cls):
-        name = os.getenv("EXCHANGE","mexc").lower()
-        api  = os.getenv("API_KEY") or os.getenv("EXCHANGE_API_KEY") or ""
-        sec  = os.getenv("SECRET")  or os.getenv("EXCHANGE_SECRET_KEY") or ""
-        sandbox = os.getenv("SANDBOX","true").lower() in {"1","true","yes","on"}
-        ex = getattr(ccxt, name)({"apiKey": api, "secret": sec, "enableRateLimit": True})
-        if sandbox and hasattr(ex, "set_sandbox_mode"):
-            try: ex.set_sandbox_mode(True)
-            except: pass
-        return cls(ex)
+def build_exchange(name: str, api: str, sec: str):
+    """
+    برمی‌گرداند: نمونهٔ اکسچنج ccxt با گارد سندباکس.
+    برای MEXC هرگز sandbox فعال نمی‌شود چون test URL ندارد.
+    """
+    ex_id = (name or "mexc").lower()
+    ex = _make_client(ex_id, api, sec)
 
-    def _ensure_markets(self):
-        if not self._markets_loaded:
-            self.ex.load_markets()
-            self._markets_loaded = True
-
-    def fetch_ticker(self, symbol: str):
-        self._ensure_markets()
+    sandbox_env = os.getenv("SANDBOX", "false").strip().lower() in {"1", "true", "yes", "on"}
+    # فقط اگر: 1) کاربر سندباکس خواسته 2) اکسچنج تست‌نت دارد 3) mexc/mexc3 نیست
+    if sandbox_env:
         try:
-            return self.ex.fetch_ticker(symbol)
-        except ccxt.NotSupported:
-            o = self.fetch_ohlcv(symbol, timeframe="1m", limit=1) or []
-            last = o[-1][4] if o else None
-            return {"symbol": symbol, "last": last}
+            urls = getattr(ex, "urls", {}) or {}
+            has_test = bool(urls.get("test"))
+            if has_test and getattr(ex, "id", ex_id) not in {"mexc", "mexc3"} and hasattr(ex, "set_sandbox_mode"):
+                ex.set_sandbox_mode(True)
+            # اگر یکی از شرایط نبود، به‌صورت امن نادیده بگیر
+        except Exception:
+            pass
 
-    def fetch_ohlcv(self, symbol: str, timeframe="1m", limit=200):
-        self._ensure_markets()
-        return self.ex.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-
-    def create_market_order(self, symbol: str, side: str, amount: float):
-        self._ensure_markets()
-        return self.ex.create_order(symbol, type="market", side=side, amount=amount)
+    ex.load_markets()
+    return ex
