@@ -1,3 +1,20 @@
+# path: ultra_clean/worker_trade.py  (فقط ابتدای راه‌اندازی)
+import os
+from ultra_clean.exchange import build_exchange, verify_auth
+
+def main():
+    ex_id = os.getenv("EXCHANGE", "mexc")
+    api = os.getenv("API_KEY", "")
+    sec = os.getenv("SECRET", "")
+
+    ex = build_exchange(ex_id, api, sec)
+    ok, err = verify_auth(ex)
+    if not ok:
+        # چرا: اگر کلید/ساعت/مجوز مشکل دارد، واضح لاگ بده و خارج شو تا ری‌استارت شود
+        print(f"[AUTH ERROR] {err}")
+        raise SystemExit(1)
+
+    # ... ادامه‌ی موتور ترید شما ...
 import os, time, logging, traceback
 from pymongo import MongoClient
 from ultra_clean.exchange import ExchangeAdapter
