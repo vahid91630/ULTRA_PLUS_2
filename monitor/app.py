@@ -1,28 +1,47 @@
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import os, socket
 
 app = FastAPI(title="Ultra Monitor", docs_url=None, redoc_url=None)
 
-def _has(k: str) -> bool: return bool(os.getenv(k))
+def _has(k: str) -> bool:
+    return bool(os.getenv(k))
 
+# ---------- Root: HTML ساده تا مشکل encoding حل شود ----------
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+<!doctype html>
+<html lang="en"><meta charset="utf-8">
+<title>Ultra Monitor</title>
+<body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; padding:18px;">
+  <h2>Ultra Monitor</h2>
+  <p>Links:</p>
+  <ul>
+    <li><a href="/status">/status</a></li>
+    <li><a href="/status/full">/status/full</a></li>
+    <li><a href="/debug/env">/debug/env</a></li>
+  </ul>
+</body>
+</html>
+"""
+
+# ---------- /status: خلاصه ----------
 @app.get("/status")
 def status():
-    need = ["API_KEY","SECRET","EXCHANGE","SYMBOL","TIMEFRAME"]
+    need = ["API_KEY", "SECRET", "EXCHANGE", "SYMBOL", "TIMEFRAME"]
     miss = [k for k in need if not _has(k)]
-    return JSONResponse({
-        "ok": len(miss)==0,
+    data = {
+        "ok": len(miss) == 0,
         "missing_env": miss,
-        "exchange": os.getenv("EXCHANGE","mexc"),
-        "sandbox": os.getenv("SANDBOX","true"),
+        "exchange": os.getenv("EXCHANGE", "mexc"),
+        "sandbox": os.getenv("SANDBOX", "true"),
         "mongo_present": bool(os.getenv("MONGO_URL")),
         "host": socket.gethostname(),
-    })
+    }
+    return JSONResponse(content=data, media_type="application/json; charset=utf-8")
 
-@app.get("/")
-def home():
-    return {"msg":"داشبورد آنلاین است. برای بررسی تنظیمات، /status و /debug/env را باز کن."}
-
+# ---------- /debug/env: برای بررسی سریع ----------
 @app.get("/debug/env")
 def debug_env():
     keep = ["API_KEY","SECRET","EXCHANGE","SANDBOX","SYMBOL","TIMEFRAME","MONGO_URL"]
@@ -31,10 +50,12 @@ def debug_env():
     for k in keep:
         v = os.getenv(k)
         out[k] = ("***" if (k in redacted and v) else v)
-    return out
-# ======= افزونه‌ی وضعیت کامل: Mongo + MEXC =======
+    return JSONResponse(content=out, media_type="application/json; charset=utf-8")
+
+# ---------- /status/full: تست Mongo + MEXC ----------
 from pymongo import MongoClient
-import ccxt, time
+import ccxt
+from urllib.parse import urlparse
 
 @app.get("/status/full")
 def status_full():
@@ -45,31 +66,24 @@ def status_full():
         "env_missing": [],
     }
 
-    # بررسی ENVهای ضروری
     need = ["API_KEY","SECRET","EXCHANGE","SYMBOL","TIMEFRAME"]
-    for k in need:
-        if not os.getenv(k):
-            result["env_missing"].append(k)
+    result["env_missing"] = [k for k in need if not _has(k)]
 
-    # --- Mongo ---
+    # Mongo
     mongo_url = os.getenv("MONGO_URL")
     if mongo_url:
         try:
             client = MongoClient(mongo_url, serverSelectionTimeoutMS=3000)
-            # اگر DBName در URI نیست، اینجا از مسیر برداشت می‌کنیم یا ULTRAplus را استفاده می‌کنیم
-            from urllib.parse import urlparse
             dbname = urlparse(mongo_url).path.lstrip("/") or os.getenv("MONGO_DB") or "ULTRAplus"
             db = client.get_database(dbname)
-            db.list_collection_names()  # تست
-            result["mongo"]["ok"] = True
-            result["mongo"]["db"] = db.name
-            result["mongo"]["collections"] = db.list_collection_names()
+            cols = db.list_collection_names()
+            result["mongo"].update(ok=True, db=db.name, collections=cols)
         except Exception as e:
             result["mongo"]["error"] = str(e)
     else:
         result["mongo"]["error"] = "MONGO_URL not set"
 
-    # --- Exchange (MEXC) ---
+    # Exchange (MEXC)
     try:
         name = (os.getenv("EXCHANGE") or "mexc").lower()
         api  = os.getenv("EXCHANGE_API_KEY") or os.getenv("API_KEY") or ""
@@ -80,25 +94,18 @@ def status_full():
                 "apiKey": api,
                 "secret": sec,
                 "enableRateLimit": True,
-                "options": {"defaultType": "spot"}
+                "options": {"defaultType": "spot"},
             })
-            # SANDBOX=false برای MEXC لازم است؛ اگر true باشد ممکن است متدها در دسترس نباشند
-            if os.getenv("SANDBOX","false").lower() in {"1","true","yes","on"} and hasattr(ex, "set_sandbox_mode"):
-                try: ex.set_sandbox_mode(True)
-                except Exception: pass
-
             ex.load_markets()
             result["exchange"]["id"] = ex.id
-
             # تست احراز هویت سبک
             ok_auth = False
             try:
                 ex.check_required_credentials()
-                _ = ex.fetch_balance()  # اگر کلید غلط باشد، اینجا خطا می‌دهد
+                _ = ex.fetch_balance()
                 ok_auth = True
             except Exception as e:
                 result["exchange"]["error"] = str(e)
-
             result["exchange"]["ok"] = True
             result["exchange"]["auth"] = "ok" if ok_auth else "failed"
         else:
@@ -106,4 +113,4 @@ def status_full():
     except Exception as e:
         result["exchange"]["error"] = str(e)
 
-    return JSONResponse(result)
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
