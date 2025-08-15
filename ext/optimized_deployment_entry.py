@@ -1,94 +1,78 @@
 #!/usr/bin/env python3
 """
-Ultra-Minimal Deployment Entry Point
+Ultra-Minimal Deployment Entry Point - Now Connected to Fast Dashboard
 Optimized for <500MB Docker image and single port deployment
 """
 
 import os
-import json
-from flask import Flask, jsonify, render_template_string
+import sys
 
-app = Flask(__name__)
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Get port from environment
-PORT = int(os.environ.get('PORT', 5000))
+def main():
+    """Main entry point that starts the fast dashboard"""
+    try:
+        # Try to run the fast dashboard directly
+        print("🚀 Starting Fast Dashboard...")
+        from fast_dashboard import app, dashboard
+        
+        PORT = int(os.environ.get('PORT', 5000))
+        print(f"📊 Dashboard running on port {PORT}")
+        print(f"🌐 Access: http://localhost:{PORT}")
+        
+        app.run(host='0.0.0.0', port=PORT, debug=False)
+        
+    except ImportError as e:
+        print(f"❌ Fast dashboard import failed: {e}")
+        print("🔄 Falling back to minimal dashboard...")
+        run_minimal_dashboard()
+    except Exception as e:
+        print(f"❌ Dashboard startup failed: {e}")
+        print("🔄 Falling back to minimal dashboard...")
+        run_minimal_dashboard()
 
-# Minimal HTML template
-MINIMAL_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Trading System</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .status { padding: 20px; border-radius: 5px; margin: 20px 0; }
-        .active { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        h1 { color: #333; margin-bottom: 30px; }
-        .metric { display: inline-block; margin: 10px 20px; }
-        .metric-label { font-weight: bold; color: #666; }
-        .metric-value { color: #28a745; font-size: 1.2em; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 Trading System Dashboard</h1>
-        
-        <div class="status active">
-            <strong>✅ System Status: ACTIVE</strong>
-        </div>
-        
-        <div class="status info">
-            <strong>🔧 Deployment Mode: Production Ready</strong>
-            <br>
-            This is the ultra-minimal deployment optimized for Replit.
-            <br>
-            Docker image size: &lt;500MB | Single port configuration: {{ port }}
-        </div>
-        
-        <div style="margin-top: 30px;">
-            <div class="metric">
-                <div class="metric-label">Port:</div>
-                <div class="metric-value">{{ port }}</div>
+def run_minimal_dashboard():
+    """Fallback minimal dashboard"""
+    from flask import Flask, jsonify, render_template_string
+    
+    app = Flask(__name__)
+    PORT = int(os.environ.get('PORT', 5000))
+    
+    MINIMAL_TEMPLATE = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Trading System - Fallback Mode</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+            .status { padding: 20px; border-radius: 5px; margin: 20px 0; background: #fff3cd; color: #856404; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Trading System - Fallback Mode</h1>
+            <div class="status">
+                <strong>⚠️ Running in minimal mode</strong><br>
+                The full dashboard is not available. System is operational on port {{ port }}.
             </div>
-            <div class="metric">
-                <div class="metric-label">Status:</div>
-                <div class="metric-value">Ready</div>
-            </div>
         </div>
-    </div>
-</body>
-</html>
-"""
-
-@app.route('/')
-def home():
-    """Main dashboard page"""
-    return render_template_string(MINIMAL_TEMPLATE, port=PORT)
-
-@app.route('/health')
-def health():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "port": PORT,
-        "deployment": "production_ready"
-    })
-
-@app.route('/api/status')
-def api_status():
-    """API status endpoint"""
-    return jsonify({
-        "system": "active",
-        "deployment": "minimal",
-        "docker_optimized": True,
-        "port": PORT,
-        "image_size": "<500MB"
-    })
+    </body>
+    </html>
+    """
+    
+    @app.route('/')
+    def home():
+        return render_template_string(MINIMAL_TEMPLATE, port=PORT)
+    
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "minimal", "port": PORT})
+    
+    print(f"🔄 Minimal dashboard running on port {PORT}")
+    app.run(host='0.0.0.0', port=PORT, debug=False)
 
 if __name__ == '__main__':
-    print(f"🚀 Starting ultra-minimal deployment on port {PORT}")
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+    main()
