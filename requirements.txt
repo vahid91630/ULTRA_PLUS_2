@@ -1,3 +1,6 @@
+pymongo
+yfinance
+python-telegram-bot
 ccxt==4.2.95
 SQLAlchemy==2.0.32
 pydantic==2.7.4
