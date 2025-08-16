@@ -17,6 +17,25 @@ def _startup(): init_db()
 
 @app.get("/", response_class=HTMLResponse)
 def root():
+  # --- نمایش موجودی واقعی صرافی (MEXC) با ccxt ---
+  balance_html = "<div class='section card' style='background:#e3f2fd;'><h2>موجودی صرافی</h2>"
+  try:
+    import ccxt
+    api_key = getattr(SETTINGS, 'api_key', None) or getattr(SETTINGS, 'API_KEY', None) or ''
+    secret = getattr(SETTINGS, 'secret_key', None) or getattr(SETTINGS, 'SECRET', None) or ''
+    if api_key and secret:
+      ex = ccxt.mexc({"apiKey": api_key, "secret": secret, "enableRateLimit": True})
+      bal = ex.fetch_balance()
+      balance_html += "<table class='table'><tr><th>ارز</th><th>مقدار</th></tr>"
+      for coin, v in bal['total'].items():
+        if v:
+          balance_html += f"<tr><td>{coin}</td><td>{v}</td></tr>"
+      balance_html += "</table>"
+    else:
+      balance_html += "<div style='color:#b71c1c'>کلید API یا Secret تنظیم نشده است.</div>"
+  except Exception as e:
+    balance_html += f"<div style='color:#b71c1c'>خطا در دریافت موجودی: {str(e)}</div>"
+  balance_html += "</div>"
   import json
   from pathlib import Path
   # Load API keys status
@@ -63,60 +82,66 @@ def root():
   equity_chart = [m.equity for m in metrics[::-1]]
   dd_chart = [m.drawdown for m in metrics[::-1]]
   ts_labels = [m.ts.strftime('%H:%M') for m in metrics[::-1]]
-  # Prepare API keys status table
-  api_keys_html = "<div class='section card'><h2>API Keys Status</h2>"
+
+  # فارسی‌سازی و بهبود گرافیکی
+  api_keys_html = "<div class='section card'><h2>وضعیت کلیدهای API</h2>"
   if api_keys_status and "api_keys" in api_keys_status:
-    api_keys_html += "<table class='table'><tr><th>Name</th><th>Description</th><th>Status</th><th>Usage</th></tr>"
+    api_keys_html += "<table class='table'><tr><th>نام</th><th>توضیح</th><th>وضعیت</th><th>کاربرد</th></tr>"
     for k, v in api_keys_status["api_keys"].items():
       api_keys_html += f"<tr><td>{v.get('name',k)}</td><td>{v.get('description','')}</td><td>{v.get('status','')}</td><td>{v.get('usage','')}</td></tr>"
     api_keys_html += "</table>"
-    api_keys_html += f"<div><b>Recommendations:</b> {'; '.join(api_keys_status.get('recommendations', []))}</div>"
+    api_keys_html += f"<div><b>توصیه‌ها:</b> {'؛ '.join(api_keys_status.get('recommendations', []))}</div>"
   else:
-    api_keys_html += "<div>No API key status data available.</div>"
+    api_keys_html += "<div>داده‌ای برای وضعیت کلیدها موجود نیست.</div>"
   api_keys_html += "</div>"
 
-  # Prepare learning progress section
-  learning_html = "<div class='section card'><h2>Learning Progress</h2>"
+  learning_html = "<div class='section card'><h2>پیشرفت یادگیری سیستم</h2>"
   if learning_progress:
-    learning_html += f"<div>Level: {learning_progress.get('intelligence_level','')}</div>"
-    learning_html += f"<div>Patterns Learned: {learning_progress.get('patterns_learned','')}</div>"
-    learning_html += f"<div>Prediction Accuracy: {learning_progress.get('prediction_accuracy','')}</div>"
-    learning_html += f"<div>Learning Cycles: {learning_progress.get('learning_cycles','')}</div>"
-    learning_html += f"<div>Win Rate: {learning_progress.get('win_rate','')}</div>"
-    learning_html += f"<div>Learning Hours: {learning_progress.get('learning_hours','')}</div>"
-    learning_html += f"<div>Enhanced Learning: {learning_progress.get('enhanced_learning_enabled','')}</div>"
-    learning_html += f"<div>Last Update: {learning_progress.get('last_update','')}</div>"
+    learning_html += f"<div>سطح هوش: {learning_progress.get('intelligence_level','')}</div>"
+    learning_html += f"<div>الگوهای یادگرفته‌شده: {learning_progress.get('patterns_learned','')}</div>"
+    learning_html += f"<div>دقت پیش‌بینی: {learning_progress.get('prediction_accuracy','')}</div>"
+    learning_html += f"<div>چرخه‌های یادگیری: {learning_progress.get('learning_cycles','')}</div>"
+    learning_html += f"<div>درصد برد: {learning_progress.get('win_rate','')}</div>"
+    learning_html += f"<div>ساعت یادگیری: {learning_progress.get('learning_hours','')}</div>"
+    learning_html += f"<div>یادگیری پیشرفته: {learning_progress.get('enhanced_learning_enabled','')}</div>"
+    learning_html += f"<div>آخرین بروزرسانی: {learning_progress.get('last_update','')}</div>"
   else:
-    learning_html += "<div>No learning progress data available.</div>"
+    learning_html += "<div>داده‌ای برای پیشرفت یادگیری موجود نیست.</div>"
   learning_html += "</div>"
 
-  # Prepare AI intelligence section
-  ai_html = "<div class='section card'><h2>AI Intelligence Report</h2>"
+  ai_html = "<div class='section card'><h2>گزارش هوش مصنوعی</h2>"
   if ai_intel and "current_intelligence" in ai_intel:
     ci = ai_intel["current_intelligence"]
-    ai_html += f"<div>Level: {ci.get('level','')}</div>"
-    ai_html += f"<div>Active AI: {', '.join(ci.get('active_ai',[]))}</div>"
-    ai_html += f"<div>Potential: {ci.get('potential','')}</div>"
-    ai_html += f"<div>Last Update: {ai_intel.get('timestamp','')}</div>"
+    ai_html += f"<div>سطح: {ci.get('level','')}</div>"
+    ai_html += f"<div>هوش فعال: {', '.join(ci.get('active_ai',[]))}</div>"
+    ai_html += f"<div>پتانسیل: {ci.get('potential','')}</div>"
+    ai_html += f"<div>آخرین بروزرسانی: {ai_intel.get('timestamp','')}</div>"
   else:
-    ai_html += "<div>No AI intelligence data available.</div>"
+    ai_html += "<div>داده‌ای برای هوش مصنوعی موجود نیست.</div>"
   ai_html += "</div>"
+
+
+  # گزارش آنلاین (نمونه)
+  live_report_html = "<div class='section card' style='background:#fffde7;'><h2>گزارش آنلاین</h2>"
+  live_report_html += "<div>سیستم فعال است و داده‌ها هر دقیقه بروزرسانی می‌شوند.</div>"
+  live_report_html += "</div>"
 
   return f"""
 <!doctype html><meta charset='utf-8'>
-<title>Ultra Dashboard</title>
+<title>داشبرد هوشمند Bardziel</title>
 <style>
-body{{font-family:-apple-system,Segoe UI,Roboto,Arial;padding:16px;max-width:1100px;margin:auto;background:#f8f8ff}}
-h1,h2{{margin:8px 0}} .grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
-.card{{border:1px solid #ddd;border-radius:10px;padding:12px;background:#fff;box-shadow:0 2px 8px #0001}}
-a{{color:#6a4dff}}
-.section{{margin-top:24px}}
-.table{{width:100%;border-collapse:collapse}}
-.table th,.table td{{border:1px solid #eee;padding:4px 8px;text-align:left}}
-.chart-container{{width:100%;height:260px;margin-bottom:16px}}
+body{font-family:'Vazirmatn',Tahoma,Arial,sans-serif;direction:rtl;padding:16px;max-width:1200px;margin:auto;background:#f8f8ff}
+h1,h2{margin:8px 0;text-align:right} .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{border:1px solid #90caf9;border-radius:10px;padding:16px;background:#fff;box-shadow:0 2px 8px #2196f31a}
+a{color:#1976d2}
+.section{margin-top:24px}
+.table{width:100%;border-collapse:collapse;background:#fff}
+.table th,.table td{border:1px solid #bbdefb;padding:6px 12px;text-align:right;font-size:15px}
+.chart-container{width:100%;height:260px;margin-bottom:16px}
+@import url('https://cdn.fontcdn.ir/Font/Persian/Vazirmatn/Vazirmatn.css');
 </style>
-<h1>Ultra Dashboard</h1>
-<p>Server: <b>{socket.gethostname()}</b></p>
+<h1>داشبرد هوشمند Bardziel</h1>
+<p>سرور: <b>{socket.gethostname()}</b></p>
 <div class="grid">
   <div class="card"><h3>Links</h3>
     <ul>
@@ -137,32 +162,34 @@ a{{color:#6a4dff}}
   </div>
 </div>
 <div class="section card">
-  <h2>Equity & Drawdown (Last 30)</h2>
+  <h2>سرمایه و افت سرمایه (۳۰ مقدار آخر)</h2>
   <div class="chart-container">
     <canvas id="equityChart"></canvas>
   </div>
 </div>
+{balance_html}
 {api_keys_html}
 {learning_html}
 {ai_html}
+{live_report_html}
 <div class="section card">
-  <h2>Recent Orders</h2>
+  <h2>سفارش‌های اخیر</h2>
   <table class="table">
-    <tr><th>ID</th><th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th><th>Paper</th></tr>
+    <tr><th>کد</th><th>زمان</th><th>نماد</th><th>سمت</th><th>مقدار</th><th>قیمت</th><th>وضعیت</th><th>آزمایشی</th></tr>
     {order_rows}
   </table>
 </div>
 <div class="section card">
-  <h2>Recent Fills</h2>
+  <h2>معاملات انجام‌شده</h2>
   <table class="table">
-    <tr><th>ID</th><th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Fee</th><th>Client</th></tr>
+    <tr><th>کد</th><th>زمان</th><th>نماد</th><th>سمت</th><th>مقدار</th><th>قیمت</th><th>کارمزد</th><th>شناسه سفارش</th></tr>
     {fill_rows}
   </table>
 </div>
 <div class="section card">
-  <h2>Recent Errors</h2>
+  <h2>خطاهای اخیر</h2>
   <table class="table">
-    <tr><th>Time</th><th>Where</th><th>Message</th></tr>
+    <tr><th>زمان</th><th>ماژول</th><th>پیام خطا</th></tr>
     {error_rows}
   </table>
 </div>
