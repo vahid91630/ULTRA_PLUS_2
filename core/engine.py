@@ -24,7 +24,11 @@ def run(mode: str):
     symbol = SETTINGS.symbol
     heartbeat_int = max(SETTINGS.heartbeat_sec, 5)
     last_hb = 0.0
-    live = (mode.lower() == "live" and ex is not None)
+    live_requested = mode.lower() == "live"
+    live = (live_requested and ex is not None)
+    if live_requested and not live:
+        # Credential enforcement: prevent silent fallback to paper
+        raise RuntimeError("LIVE mode requested but exchange credentials not loaded (MEXC_API_KEY / MEXC_API_SECRET).")
 
     open_qty, avg_price, sl_price, tp_price = 0.0, 0.0, None, None
 

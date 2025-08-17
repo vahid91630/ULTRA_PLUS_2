@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     mode: str = Field(default=os.getenv("MODE", "paper"))  # paper | live
     exchange: str = Field(default=(os.getenv("EXCHANGE") or "MEXC"))
     api_key: str = Field(default=os.getenv("MEXC_API_KEY") or os.getenv("API_KEY") or "")
-    api_secret: str = Field(default=os.getenv("MEXC_API_SECRET") or os.getenv("SECRET") or "")
+    # Allow both MEXC_API_SECRET and MEXC_SECRET_KEY naming conventions
+    api_secret: str = Field(default=(os.getenv("MEXC_API_SECRET") or os.getenv("MEXC_SECRET_KEY") or os.getenv("SECRET") or ""))
     db_url: str = Field(default=os.getenv("DB_URL", "").strip())
     port: int = Field(default=int(os.getenv("PORT", "8000")))
 

@@ -1,4 +1,4 @@
-from __future__ annotations
+from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
